@@ -1,0 +1,34 @@
+{
+    "admin": {
+        "senha": "$2b$12$Rdwu7s61eNd2xdlyoiyIfuPolaJrMZkUddXRoPe0rJdmR6O9/yeVy",
+        "email": "admin@gmail.com"
+    },
+    "gabriel": {
+        "senha": "$2b$12$v13B.0cB/1qTTK154f.cC.zWq3JkYWjvr98Ib1L.MSG9.4n8gjZs2",
+        "email": "gabriel@gmail.com"
+    },
+    "neto": {
+        "senha": "$2b$12$j1epEdhj/e69nggUjsQ2.OgW1ly.kElI7z/Kv0g4RWfyrn3Kh5aeS",
+        "email": "neto@neto"
+    },
+    "arthur@gmail.com": {
+        "nome_completo": "Arthur Pendragon",
+        "senha": "$2b$12$STt5rpae.IrNLXAKMGBowOHan0DPzxAtrDb0Z.Xg9XbIhrakPMRQy"
+    },
+    "teste2@gmail.com": {
+        "nome_completo": "teste2",
+        "senha": "$2b$12$rGCIrBpZqRtmUb7VG8LlO.1Rq5G3ADSaGJvOt7mNjO7kYne6o7bR6"
+    },
+    "dt@gmail.com": {
+        "nome_completo": "dt",
+        "senha": "$2b$12$VDP0QLVZb5xBJJg5NAgdce7gC6gdE3kLDnTt2.kGA8sRqCDh4YHM."
+    },
+    "dt2@gmail.com": {
+        "nome_completo": "dt2",
+        "senha": "$2b$12$Av1iEEdnlwgqJiLr2bujKOhOU2uZ/EWRvxdm5jFDIElZNn2Zm41Hu"
+    },
+    "testecadastro@gmail.com": {
+        "nome_completo": "testando novo cadastro",
+        "senha": "$2b$12$0xqHJj.bPUgdp1cGjkaAxuHK7GrRD0k/yUn8k2gMxZ.Epn1tcBJJe"
+    }
+}

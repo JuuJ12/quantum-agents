@@ -1,0 +1,72 @@
+div.stForm {
+    text-decoration: #000000;
+    background-color: #afa5ce !important;
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+
+.st-emotion-cache-av7894 {
+    background-color: #7f5af0 !important;
+    color: #ffffff !important;
+    border-radius: 0.5rem !important;
+    min-height: 2.5rem !important;
+    padding: 0.25rem 0.75rem !important;
+    border: none !important;
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    width: fit-content !important;
+}
+
+.st-emotion-cache-av7894:hover {
+    background-color: #6a48d0 !important;
+}
+
+.st-emotion-cache-av7894:focus {
+    outline: 2px solid #5d3ebc !important;
+    outline-offset: 2px !important;
+}
+div.stButton > p {
+    color: #ffffff !important;
+}
+div.stButton > button {
+    background-color: #7f5af0 !important;
+    color: #ffffff !important;
+    border-radius: 5px;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+}
+
+div.stButton > button:hover {
+    background-color: #6a48d0 !important;
+}
+
+div.stButton > button:focus {
+    outline: 2px solid #5d3ebc !important;
+    outline-offset: 2px;
+}
+
+/* Estilos para o link "Esqueci minha senha" */
+.forgot-password-link {
+    margin-bottom: 10px;
+}
+
+.forgot-password-link a {
+    color: #31333f; /* Cor roxa para o link */
+    text-decoration: none; /* Remove o sublinhado padrão */
+    font-size: 0.9em; /* Ajusta o tamanho da fonte */
+}
+
+.forgot-password-link a:hover {
+    text-decoration: underline; /* Adiciona sublinhado no hover */
+    color: #7f5af0; /* Um tom ligeiramente diferente no hover */
+}
+
+[data-testid="stSidebar"] {
+    background-image: url("https://i.ibb.co/TSvc4gv/wmremove-transformed.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
