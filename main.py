@@ -75,22 +75,26 @@ if st.session_state.get('autenticado', False):
 
 # Só mostra as páginas se o usuário estiver autenticado
 if st.session_state.get('autenticado', False):
-    pag1 = st.Page(
-        page= "paginas/page_1.py",
-        title="Iniciando a Jornada",
-        icon='🧙‍♂️',
-        default=True
-    )
+    # pag1 = st.Page(
+    #     page= "paginas/page_1.py",
+    #     title="Iniciando a Jornada",
+    #     icon='🧙‍♂️',
+    #     default=True
+    # )
 
-    pag2 = st.Page(
-        page= "paginas/page_2.py",
-        title="Alto Conselho do Mentorium",
-        icon='🧙‍♂️'
-    )
+    # pag2 = st.Page(
+    #     page= "paginas/page_2.py",
+    #     title="Alto Conselho do Mentorium",
+    #     icon='🧙‍♂️'
+    # )
 
+    pag3 = st.Page(
+        page ='Agents/quantum_agents_page.py'
+    )
     paginas = st.navigation({
-        "Jornada": [pag1],
-        "Àgora": [pag2],
+        # "Jornada": [pag1],
+        # "Àgora": [pag2],
+        "Agentes": [pag3]
     })
 
     paginas.run()

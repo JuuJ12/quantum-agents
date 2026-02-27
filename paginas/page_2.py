@@ -4,8 +4,8 @@ from PIL import Image
 # if "pagina" not in st.session_state or st.session_state.pagina != "principal":
 #     st.switch_page("paginas/tela_login_e_cadastro.py")
 
-from Agents.conselho_dos_magos import chat
-from Agents.conselho_dos_magos import respostass
+from Agents.quantum_agents_page import chat
+from Agents.quantum_agents_page import respostass
 
 # Configurar imagem de fundo
 
