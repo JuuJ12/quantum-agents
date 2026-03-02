@@ -1,10 +1,9 @@
 import os
 import sys
+import io
 from pathlib import Path
 from dotenv import load_dotenv
 from typing import Optional, List
-from pydantic import BaseModel, Field #usamos o pydantic para dizer que tipo de saída deve ser aceita
-                                      #LLms geram textos, mas as aplicações precisam de DADOS eu é com o pydantic que nos estruturamos esses dados
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from qiskit import QuantumCircuit
@@ -96,4 +95,15 @@ def agent_executor_circuit(input: CircuitPlan):
     compiled_circuit = transpile(qc, simulator)
     result = simulator.run(compiled_circuit, shots=1024).result()
     counts = result.get_counts(compiled_circuit) #serve para contar quantas vezes cada resultado foi obtido na execução do circuito, ou seja, ele vai contar quantas vezes obteve 00, 01, 10 e 11, por exemplo, se for um circuito de 2 qubits
-    return qc, counts
+
+    circuit_image_bytes = None
+    try:
+        fig = qc.draw(output="mpl") #serve para desenhar o circuito usando Matplotlib, e o output "mpl" indica que queremos a saída em formato de figura do Matplotlib
+        buffer = io.BytesIO() #serve para criar um buffer de bytes em memória, ou seja, ele vai armazenar a imagem do circuito em formato de bytes para que possamos exibir na interface do usuário
+        fig.savefig(buffer, format="png", bbox_inches="tight") #serve para salvar a figura do circuito no buffer de bytes, usando o formato PNG e ajustando os limites da figura para que fique mais compacta
+        buffer.seek(0) # serve para mover o cursor do buffer para o início, ou seja, ele vai garantir que a leitura dos bytes comece do início da imagem salva no buffer
+        circuit_image_bytes = buffer.getvalue() #serve para obter os bytes da imagem do circuito a partir do buffer, ou seja, ele vai ler os bytes da imagem salva no buffer e armazenar na variável circuit_image_bytes para que possamos exibir na interface do usuário
+    except Exception:
+        circuit_image_bytes = None
+
+    return qc, counts, circuit_image_bytes

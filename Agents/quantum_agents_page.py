@@ -12,7 +12,9 @@ load_dotenv()
 
 
 input = st.text_input("Descreva o circuito quântico que deseja criar:", key="input")
+col1, col2 = st.columns(2)
 if input:
+    image_width = st.slider("Largura da imagem do circuito (px)", min_value=300, max_value=1400, value=700, step=50)
     
     with st.spinner("Processando..."):
         circuit_requirements = agent_extrator(input) #model dump é um método do pydantic que converte o modelo em um dicionário, facilitando a visualização dos dados estruturados retornados pelo agente_extrator
@@ -23,13 +25,20 @@ if input:
         circuit_plan = agent_builder(circuit_requirements)
     st.subheader("Plano do Circuito:")
     st.write(circuit_plan.model_dump()) #model dump é um método do pydantic
-   
+
     with st.spinner("Executando circuito..."):
-        qc, counts = agent_executor_circuit(circuit_plan)
+        qc, counts, circuit_image_bytes = agent_executor_circuit(circuit_plan)
+        
+    with col1:
         st.subheader("Circuito Executado:")
         st.write(qc)
-        st.subheader("Resultados:")
-        st.write(counts)
+    with col2:
+        if circuit_image_bytes:
+            st.image(circuit_image_bytes, caption="Imagem do circuito", width=image_width)
+        else:
+            st.info("Não foi possível renderizar a imagem do circuito neste ambiente.")
+    st.subheader("Resultados:")
+    st.write(counts)
 
 
 

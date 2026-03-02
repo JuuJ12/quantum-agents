@@ -21,3 +21,8 @@ class CircuitPlan(BaseModel): # esturura da lista de portas que o agente constru
     gates: List[Gate] = Field(
         description="List of quantum gates to be applied in the circuit"
     )
+
+class EvaluationResult(BaseModel):
+    reward: float = Field(description="Reward value for the executed circuit")
+    verdict: str = Field(description="Evaluation verdict (e.g., 'success', 'partial success', 'failure')")
+    next_action: str = Field(description="Recommended next action based on the evaluation")

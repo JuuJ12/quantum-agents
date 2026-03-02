@@ -19,7 +19,7 @@ if 'autenticado' not in st.session_state:
 sidebar_state = "expanded" if st.session_state.get('autenticado', False) else "collapsed"
 
 st.set_page_config(
-    page_title='Mentorium',
+    page_title='Quantum Agents',
     layout="wide",
     initial_sidebar_state=sidebar_state,
 )
@@ -38,7 +38,7 @@ exibir_tela_login_registro()
 if st.session_state.get('login_sucesso', False):
     mensagem_container = st.empty()
     with mensagem_container.container():
-        st.success(f"🎉 Bem-vindo ao Mentorium, {st.session_state.usuario}! Sua jornada mágica começa agora!")
+        st.success(f"🎉 Bem-vindo ao Quantum Agents, {st.session_state.usuario}! Sua jornada mágica começa agora!")
     
     time.sleep(3)
     mensagem_container.empty()
@@ -47,7 +47,7 @@ if st.session_state.get('login_sucesso', False):
 
 # Controla a exibição do sidebar baseado na autenticação
 if st.session_state.get('autenticado', False):
-    st.sidebar.text('Mentorium')
+    st.sidebar.text('Quantum Agents')
     if st.session_state.get('usuario_nome'):
         st.sidebar.success(f"Bem-vindo, {st.session_state['usuario_nome']}!")
     elif st.session_state.get('usuario'):
@@ -75,26 +75,12 @@ if st.session_state.get('autenticado', False):
 
 # Só mostra as páginas se o usuário estiver autenticado
 if st.session_state.get('autenticado', False):
-    # pag1 = st.Page(
-    #     page= "paginas/page_1.py",
-    #     title="Iniciando a Jornada",
-    #     icon='🧙‍♂️',
-    #     default=True
-    # )
 
-    # pag2 = st.Page(
-    #     page= "paginas/page_2.py",
-    #     title="Alto Conselho do Mentorium",
-    #     icon='🧙‍♂️'
-    # )
-
-    pag3 = st.Page(
+    pag1 = st.Page(
         page ='Agents/quantum_agents_page.py'
     )
     paginas = st.navigation({
-        # "Jornada": [pag1],
-        # "Àgora": [pag2],
-        "Agentes": [pag3]
+        "Quantum Agents": [pag1]
     })
 
     paginas.run()
