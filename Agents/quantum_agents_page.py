@@ -6,7 +6,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import firebase_admin 
 from firebase_admin import credentials, firestore
-from Agents.agents_models import agent_extrator, agent_builder, agent_executor_circuit
+from Agents.agents_models import agent_extrator, agent_builder, agent_executor_circuit, agent_metric
 
 load_dotenv()
 
@@ -29,6 +29,11 @@ if input:
     with st.spinner("Executando circuito..."):
         qc, counts, circuit_image_bytes = agent_executor_circuit(circuit_plan)
         
+    with st.spinner("Calculando métricas..."):
+        metrics = agent_metric(qc, circuit_requirements.target_state, counts)
+    st.subheader("Métricas do Circuito:")
+    st.write(metrics.model_dump())
+
     with col1:
         st.subheader("Circuito Executado:")
         st.write(qc)

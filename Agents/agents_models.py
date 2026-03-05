@@ -9,12 +9,13 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 from qiskit import transpile
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from Agents_Classes.agents_classes import StructuredCircuit, CircuitPlan
+from Agents_Classes.agents_classes import StructuredCircuit, CircuitPlan, CircuitMetrics
 load_dotenv()
 
 llama = ChatGroq(
@@ -107,3 +108,38 @@ def agent_executor_circuit(input: CircuitPlan):
         circuit_image_bytes = None
 
     return qc, counts, circuit_image_bytes
+
+def _normalize_target_state(target_state: str) -> str:
+    cleaned = target_state.strip().lower().replace("|", "").replace(">", "")
+    cleaned = cleaned.replace(" ", "")
+    return cleaned
+
+
+def calculate_fidelity(counts: dict, ideal_state: str) -> float:
+    # For measured circuits, use probability mass on expected outcomes.
+    if not counts:
+        return 0.0
+
+    target = _normalize_target_state(ideal_state)
+    total_shots = sum(counts.values())
+    if total_shots == 0:
+        return 0.0
+
+    # If the target is a descriptive Bell/entangled request, use correlated/anti-correlated outcomes.
+    entangled_keywords = ("entangled", "bell", "phi", "psi")
+    if any(keyword in target for keyword in entangled_keywords):
+        correlated = counts.get("00", 0) + counts.get("11", 0)
+        anticorrelated = counts.get("01", 0) + counts.get("10", 0)
+        return float(max(correlated, anticorrelated) / total_shots)
+
+    hits = counts.get(target, 0)
+    return float(hits / total_shots)
+
+def calculate_depth(circuit: QuantumCircuit) -> int:
+    return circuit.depth()  #retorna a profundidade do circuito, ou seja, ele vai contar quantas camadas de portas existem no circuito para dar uma medida da complexidade do circuito
+
+def agent_metric(circuit: QuantumCircuit, ideal_state: str, counts: dict) -> CircuitMetrics:
+    fidelity = calculate_fidelity(counts, ideal_state)
+    depth = calculate_depth(circuit)
+    gate_count = circuit.size() #conta o total de instruções no circuito (incluindo medições), útil como métrica de complexidade
+    return CircuitMetrics(fidelity=fidelity, depth=depth, gate_count=gate_count)
