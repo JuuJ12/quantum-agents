@@ -26,13 +26,16 @@ if usuario_email and historico_owner != usuario_email:
         st.warning(f"Nao foi possivel carregar historico do Firebase: {e}")
 
 
-input = st.text_input("Descreva o circuito quântico que deseja criar:", key="input")
-col1, col2 = st.columns(2)
-if input:
+with st.form("quantum_circuit_form"):
+    user_prompt = st.text_input("Descreva o circuito quântico que deseja criar:", key="input")
     image_width = st.slider("Largura da imagem do circuito (px)", min_value=300, max_value=1400, value=700, step=50)
-    
+    executar = st.form_submit_button("Executar circuito")
+
+col1, col2 = st.columns(2)
+if executar and user_prompt:
+
     with st.spinner("Processando..."):
-        circuit_requirements = agent_extrator(input) #model dump é um método do pydantic que converte o modelo em um dicionário, facilitando a visualização dos dados estruturados retornados pelo agente_extrator
+        circuit_requirements = agent_extrator(user_prompt) #model dump é um método do pydantic que converte o modelo em um dicionário, facilitando a visualização dos dados estruturados retornados pelo agente_extrator
     st.subheader("Requisitos do Circuito:")
     st.write(circuit_requirements.model_dump()) #model dump é um método do pydantic que converte o modelo em um dicionário, facilitando a visualização dos dados estruturados retornados pelo agente_extrator
    
@@ -71,7 +74,7 @@ if input:
 
     if usuario_email:
         message_record = {
-            "prompt": input,
+            "prompt": user_prompt,
             "requirements": circuit_requirements.model_dump(),
             "planning": circuit_plan.model_dump(),
             "metrics": metrics.model_dump(),
@@ -84,6 +87,9 @@ if input:
             st.success("Historico salvo no Firebase.")
         except Exception as e:
             st.error(f"Falha ao salvar no Firebase: {e}")
+
+elif executar:
+    st.warning("Digite uma descrição do circuito antes de executar.")
 
 if usuario_email and st.session_state.get("quantum_messages"):
     with st.expander("Historico salvo no Firebase", expanded=False):
