@@ -1,14 +1,29 @@
-import os
 from dotenv import load_dotenv
 import streamlit as st
-from streamlit_lottie import st_lottie
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import firebase_admin 
-from firebase_admin import credentials, firestore
-from Agents.agents_models import agent_extrator, agent_builder, agent_executor_circuit, agent_metric
+from Agents.agents_models import agent_extrator, agent_builder, agent_executor_circuit, agent_metric,agent_synthesizer
+from auth.firebase_store import save_quantum_messages, load_quantum_messages
 
 load_dotenv()
+
+
+def salvar_mensagens_quantum(email, mensagens):
+    save_quantum_messages(email, mensagens)
+
+
+def carregar_mensagens_quantum(email):
+    return load_quantum_messages(email)
+
+
+usuario_email = st.session_state.get("usuario")
+historico_owner = st.session_state.get("quantum_messages_owner")
+if usuario_email and historico_owner != usuario_email:
+    try:
+        st.session_state["quantum_messages"] = carregar_mensagens_quantum(usuario_email)
+        st.session_state["quantum_messages_owner"] = usuario_email
+    except Exception as e:
+        st.session_state["quantum_messages"] = []
+        st.session_state["quantum_messages_owner"] = usuario_email
+        st.warning(f"Nao foi possivel carregar historico do Firebase: {e}")
 
 
 input = st.text_input("Descreva o circuito quântico que deseja criar:", key="input")
@@ -45,32 +60,34 @@ if input:
     st.subheader("Resultados:")
     st.write(counts)
 
+    with st.spinner("Resumindo resultados..."):
+        summary = agent_synthesizer(
+            requirements=circuit_requirements.model_dump(),
+            planning=circuit_plan.model_dump(),
+            metrics=metrics.model_dump()
+        )
+    st.subheader("Resumo:")
+    st.write(summary)
+
+    if usuario_email:
+        message_record = {
+            "prompt": input,
+            "requirements": circuit_requirements.model_dump(),
+            "planning": circuit_plan.model_dump(),
+            "metrics": metrics.model_dump(),
+            "results": counts,
+            "summary": summary,
+        }
+        st.session_state.setdefault("quantum_messages", []).append(message_record)
+        try:
+            salvar_mensagens_quantum(usuario_email, st.session_state["quantum_messages"])
+            st.success("Historico salvo no Firebase.")
+        except Exception as e:
+            st.error(f"Falha ao salvar no Firebase: {e}")
+
+if usuario_email and st.session_state.get("quantum_messages"):
+    with st.expander("Historico salvo no Firebase", expanded=False):
+        st.write(st.session_state["quantum_messages"])
 
 
-
-
-
-
-
-
-
-
-
-
-
-if not firebase_admin._apps:
-    cred = credentials.Certificate("auth/firebase_key.json")
-    firebase_admin.initialize_app(cred)
-
-def salvar_mensagens_conselho(email, mensagens):
-    db = firestore.client()
-    db.collection("conselho_chats").document(email).set({"mensagens": mensagens})
-
-def carregar_mensagens_conselho(email):
-    db = firestore.client()
-    doc = db.collection("conselho_chats").document(email).get()
-    if doc.exists:
-        return doc.to_dict().get("mensagens", [])
-    else:
-        return []
 

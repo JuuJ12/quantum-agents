@@ -7,10 +7,8 @@ from streamlit_lottie import st_lottie
 from .auth_firebase import cadastro, login
 from streamlit.components.v1 import html
 from paginas.recuperacao_senha import mostrar_recuperacao_senha
-from firebase_admin import firestore
-import firebase_admin
-from firebase_admin import credentials
 from dotenv import load_dotenv
+from .firebase_store import get_firestore_client
 
 # Carrega as variáveis de ambiente
 load_dotenv()
@@ -19,37 +17,6 @@ load_dotenv()
 ALLOWED_DOMAINS = ["gmail.com", "outlook.com", "hotmail.com"] 
 MIN_PASSWORD_LENGTH = 6 
 MAX_NAME_LENGTH = 100 
-
-if not firebase_admin._apps:
-    try:
-        firebase_credentials = {
-            "type": os.getenv("FIREBASE_TYPE", "service_account"),
-            "project_id": os.getenv("FIREBASE_PROJECT_ID"),
-            "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
-            "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace("\\n", "\n") if os.getenv("FIREBASE_PRIVATE_KEY") else None,
-            "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
-            "client_id": os.getenv("FIREBASE_CLIENT_ID"),
-            "auth_uri": os.getenv("FIREBASE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
-            "token_uri": os.getenv("FIREBASE_TOKEN_URI", "https://oauth2.googleapis.com/token"),
-            "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs"),
-            "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL"),
-            "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN", "googleapis.com")
-        }
-        
-        # Verifica se as credenciais essenciais estão presentes
-        if not all([firebase_credentials["project_id"], firebase_credentials["private_key"], firebase_credentials["client_email"]]):
-            raise ValueError("Credenciais Firebase incompletas no arquivo .env")
-        
-        cred = credentials.Certificate(firebase_credentials)
-        firebase_admin.initialize_app(cred)
-        print("✅ Firebase inicializado com sucesso usando variáveis de ambiente")
-        
-    except FileNotFoundError:
-        print("⚠️  Arquivo .env não encontrado. Funcionalidade Firebase desabilitada.")
-    except ValueError as e:
-        print(f"⚠️  Erro nas credenciais Firebase: {e}")
-    except Exception as e:
-        print(f"⚠️  Erro ao inicializar Firebase: {e}") 
 
 def is_valid_email_format(email_str):
     """Verifica o formato básico do e-mail e o domínio."""
@@ -64,7 +31,7 @@ def is_valid_email_format(email_str):
 
     domain = email_str.split('@')[1].lower()
     if domain not in ALLOWED_DOMAINS:
-        return False, f"Este domínio não é reconhecido pelo Conselho Arcano. Use domínios como: {', '.join(ALLOWED_DOMAINS)}." # CT-AUT-22
+        return False, f"Este domínio não é reconhecido. Use domínios como: {', '.join(ALLOWED_DOMAINS)}." # CT-AUT-22
     return True, email_str 
 
 def is_strong_password(password_str):
@@ -85,12 +52,12 @@ def is_strong_password(password_str):
     )
     
     if emoji_pattern.search(password_str):
-        return False, "As runas mágicas não devem conter símbolos encantados (emojis). Use apenas letras, números e símbolos tradicionais."
+        return False, "Use apenas letras, números e símbolos tradicionais."
     
     # A validação de comprimento aqui ainda é útil como uma verificação de frontend,
     # mesmo que o Firebase também valide.
     if len(password_str) < MIN_PASSWORD_LENGTH:
-        return False, "A Palavra-Passe deve conter pelo menos 6 runas mágicas." # CT-AUT-14
+        return False, "A Palavra-Passe deve conter pelo menos 6 digitos." # CT-AUT-14
     return True, ""
 
 def sanitize_full_name(name_str):
@@ -117,7 +84,7 @@ def verificar_login(email, senha):
     
     if autenticado:
         # Busca o nome no Firestore
-        db = firestore.client()
+        db = get_firestore_client()
         doc = db.collection("users").document(email).get()
         nome = doc.to_dict().get("nome") if doc.exists else ""
         st.session_state["usuario_nome"] = nome
@@ -153,9 +120,9 @@ def registrar_usuario(nome_completo, email, senha):
         # para salvar informações adicionais do usuário (como o nome completo)
         # em um Firestore ou Realtime Database.
         
-        success_message = "Inscrição concluída! Teu nome foi gravado nos registros sagrados."
+        success_message = "Inscrição concluída!"
         if foi_truncado: 
-            success_message += " (Observação: Teu nome foi abreviado para caber nos registros antigos.)"
+            success_message += " (Observação: Teu nome foi abreviado para caber nos registros)"
         return "success", success_message
     else:
         # A mensagem de erro já vem do auth_firebase.py
@@ -189,7 +156,7 @@ def exibir_tela_login_registro():
         st.session_state.registration_inputs = {"nome": "", "email": "", "senha": "", "conf_senha": ""}
 
     if not st.session_state.get('autenticado', False):
-        st.title("Login Mentorium")
+        st.title("Login")
         
         tab_login, tab_registro = st.tabs(["Login", "Registrar"])
         
@@ -238,11 +205,11 @@ def exibir_tela_login_registro():
                             st.rerun()
                         # Validação do comprimento da senha
                         elif len(senha_login.strip()) < MIN_PASSWORD_LENGTH:
-                            st.session_state.mensagem_erro_login = f"A Palavra-Passe deve conter pelo menos {MIN_PASSWORD_LENGTH} runas mágicas."
+                            st.session_state.mensagem_erro_login = f"A Palavra-Passe deve conter pelo menos {MIN_PASSWORD_LENGTH} caracteres."
                             st.session_state.limpar_senha_login = True
                             st.rerun()
                         else:
-                            with st.spinner("Verificando suas credenciais arcanas..."):
+                            with st.spinner("Verificando suas credenciais..."):
                                 # Chama a função de login que agora usa o Firebase
                                 autenticado, message = verificar_login(email_login, senha_login)
                                 
@@ -251,7 +218,7 @@ def exibir_tela_login_registro():
                                     time.sleep(1)  # Pequena pausa para melhor experiência
                                     
                             if autenticado:
-                                with st.spinner("Bem-vindo ao Mentorium! Preparando sua jornada..."):
+                                with st.spinner("Bem-vindo ao Quantum Agents! Preparando sua jornada..."):
                                     time.sleep(2)  # Simula carregamento da aplicação
                                     
                                 st.session_state.autenticado = True
@@ -276,7 +243,7 @@ def exibir_tela_login_registro():
                                 # Define flag para limpar campo de senha na próxima execução
                                 st.session_state.limpar_senha_login = True
                                 # Armazena a mensagem de erro para exibir
-                                st.session_state.mensagem_erro_login = "Selo Mágico ou Palavra-Passe inválidos. Tente novamente ou inicie o Ritual de Recuperação."
+                                st.session_state.mensagem_erro_login = "Senha ou Palavra-Passe inválidos. Tente novamente ou inicie vá para recuperação de senha."
                                 st.rerun()
             
             with st.expander("Esqueci minha senha", expanded=False):
@@ -284,7 +251,7 @@ def exibir_tela_login_registro():
 
         with tab_registro:
             with st.form("register_form"):
-                st.subheader("Inscreva-se no Mentorium")
+                st.subheader("Inscreva-se")
                 
                 nome_completo_reg = st.text_input("Nome Completo", 
                                                     value=st.session_state.registration_inputs["nome"], 
@@ -292,21 +259,21 @@ def exibir_tela_login_registro():
                 if "nome" in st.session_state.registration_errors:
                     st.error(st.session_state.registration_errors["nome"])
 
-                email_reg = st.text_input("E-mail de Invocação", 
+                email_reg = st.text_input("E-mail", 
                                                 value=st.session_state.registration_inputs["email"], 
                                                 key="reg_email",
                                                 help=f"Domínios permitidos: {', '.join(ALLOWED_DOMAINS)}")
                 if "email" in st.session_state.registration_errors:
                     st.error(st.session_state.registration_errors["email"])
 
-                senha_reg = st.text_input("Senha Arcana", type="password", 
+                senha_reg = st.text_input("Senha", type="password", 
                                                 value=st.session_state.registration_inputs["senha"], 
                                                 key="reg_senha",
                                                 help=f"Mínimo {MIN_PASSWORD_LENGTH} caracteres.")
                 if "senha" in st.session_state.registration_errors:
                     st.error(st.session_state.registration_errors["senha"])
 
-                confirmar_senha_reg = st.text_input("Confirmar Senha Arcana", type="password", 
+                confirmar_senha_reg = st.text_input("Confirmar Senha", type="password", 
                                                         value=st.session_state.registration_inputs["conf_senha"],
                                                         key="reg_conf_senha")
                 if "conf_senha" in st.session_state.registration_errors:
@@ -323,7 +290,7 @@ def exibir_tela_login_registro():
 
                     # Validações locais (antes de chamar o Firebase)
                     if not nome_completo_reg.strip():
-                        st.session_state.registration_errors["nome"] = "Até mesmo os magos precisam de um nome... Informe como deseja ser chamado em nossos grimórios."
+                        st.session_state.registration_errors["nome"] = "Os agentes gostariam de saber seru nome. Informe como deseja ser chamado"
                     
                     email_valido, msg_email = is_valid_email_format(email_reg)
                     if not email_valido:
@@ -333,7 +300,7 @@ def exibir_tela_login_registro():
                     if not senha_valida:
                         st.session_state.registration_errors["senha"] = msg_senha
                     elif senha_reg.strip() != confirmar_senha_reg.strip(): 
-                        st.session_state.registration_errors["conf_senha"] = "As senhas não se alinham como as constelações."
+                        st.session_state.registration_errors["conf_senha"] = "As senhas não estão emaranhadas corretamente. Certifique-se de que ambas as palavras-passe sejam idênticas." 
                     
                     # Se houver erros de validação locais, exibe-os e interrompe.
                     if st.session_state.registration_errors:
@@ -341,7 +308,7 @@ def exibir_tela_login_registro():
 
                     # Se não houver erros de validação locais, tenta registrar no Firebase
                     if not st.session_state.registration_errors:
-                        with st.spinner("O Conselho está inscrevendo teu nome nos registros sagrados..."):
+                        with st.spinner("Entrando no universo Quântico..."):
                             time.sleep(1) # Pequena pausa para a experiência do usuário
                             
                             status_code, message = registrar_usuario(nome_completo_reg, email_reg, senha_reg)

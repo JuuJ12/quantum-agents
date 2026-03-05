@@ -1,26 +1,29 @@
 import os
 import requests
 from dotenv import load_dotenv
-import firebase_admin
-from firebase_admin import credentials, firestore
+from .firebase_store import get_firestore_client
 
 load_dotenv()
-firebaseConfig = {
-    'apiKey': os.getenv("FIREBASE_API_KEY"),
-    'authDomain': os.getenv("AUTH_DOMAIN"),
-    'projectId': os.getenv("PROJECT_ID"),
-    'storageBucket': os.getenv("STORAGE_BUCKET"),
-    'databaseURL': os.getenv("DATABASE_URL"),
-    'messagingSenderId': os.getenv("MESSAGING_SENDER_ID"),
-    'appId': os.getenv("APP_ID"),
-    'measurementId': os.getenv("MEASUREMENT_ID")
-}
+
+
+def get_firebase_web_config() -> dict[str, str | None]:
+    """Retorna a configuracao Web do Firebase com suporte a aliases legados."""
+    return {
+        "apiKey": os.getenv("FIREBASE_API_KEY", "AIzaSyDl2FEsLbxBe4mcA848xgyQzWv6ShDfHMc"),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN") or os.getenv("AUTH_DOMAIN") or "quantum-agents-cb893.firebaseapp.com",
+        "projectId": os.getenv("FIREBASE_PROJECT_ID") or os.getenv("PROJECT_ID") or "quantum-agents-cb893",
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET") or os.getenv("STORAGE_BUCKET") or "quantum-agents-cb893.firebasestorage.app",
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID") or os.getenv("MESSAGING_SENDER_ID") or "124016539317",
+        "appId": os.getenv("FIREBASE_APP_ID") or os.getenv("APP_ID") or "1:124016539317:web:1923cbba500622c9d730fc",
+        "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID") or os.getenv("MEASUREMENT_ID") or "G-K8LFYCR19G",
+    }
 
 
 def _firebase_auth_request(endpoint: str, payload: dict) -> dict:
-    api_key = firebaseConfig.get("apiKey")
+    firebase_config = get_firebase_web_config()
+    api_key = firebase_config.get("apiKey")
     if not api_key:
-        raise ValueError("FIREBASE_API_KEY não configurada no arquivo .env")
+        raise ValueError("FIREBASE_API_KEY nao configurada")
 
     url = f"https://identitytoolkit.googleapis.com/v1/{endpoint}?key={api_key}"
     response = requests.post(url, json=payload, timeout=15)
@@ -31,37 +34,6 @@ def _firebase_auth_request(endpoint: str, payload: dict) -> dict:
 
     error_code = data.get("error", {}).get("message", "UNKNOWN_ERROR")
     raise ValueError(error_code)
-
-if not firebase_admin._apps:
-    try:
-        firebase_credentials = {
-            "type": os.getenv("FIREBASE_TYPE", "service_account"),
-            "project_id": os.getenv("FIREBASE_PROJECT_ID"),
-            "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
-            "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace("\\n", "\n") if os.getenv("FIREBASE_PRIVATE_KEY") else None,
-            "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
-            "client_id": os.getenv("FIREBASE_CLIENT_ID"),
-            "auth_uri": os.getenv("FIREBASE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
-            "token_uri": os.getenv("FIREBASE_TOKEN_URI", "https://oauth2.googleapis.com/token"),
-            "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs"),
-            "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL"),
-            "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN", "googleapis.com")
-        }
-        
-        # Verifica se as credenciais essenciais estão presentes
-        if not all([firebase_credentials["project_id"], firebase_credentials["private_key"], firebase_credentials["client_email"]]):
-            raise ValueError("Credenciais Firebase incompletas no arquivo .env")
-        
-        cred = credentials.Certificate(firebase_credentials)
-        firebase_admin.initialize_app(cred)
-        print("✅ Firebase inicializado com sucesso usando variáveis de ambiente")
-        
-    except FileNotFoundError:
-        print("⚠️  Arquivo .env não encontrado. Funcionalidade Firebase desabilitada.")
-    except ValueError as e:
-        print(f"⚠️  Erro nas credenciais Firebase: {e}")
-    except Exception as e:
-        print(f"⚠️  Erro ao inicializar Firebase: {e}")
 
 def cadastro(email: str, senha: str, nome: str) -> tuple[bool, str]:
     """
@@ -80,20 +52,20 @@ def cadastro(email: str, senha: str, nome: str) -> tuple[bool, str]:
             },
         )
         # Salva o nome no Firestore
-        db = firestore.client()
+        db = get_firestore_client()
         db.collection("users").document(email).set({"nome": nome, "email": email})
         return True, "Cadastro realizado com sucesso!"
     except Exception as e:
         error_message = str(e)
         if "EMAIL_EXISTS" in error_message:
-            return False, "Este e-mail já está em uso por outro feiticeiro."
+            return False, "Este e-mail já está em uso."
         elif "WEAK_PASSWORD" in error_message:
             return False, "A senha é muito fraca. Escolha uma senha mais forte (mínimo 6 caracteres)."
         elif "INVALID_EMAIL" in error_message:
-            return False, "Formato de e-mail inválido. Verifique o pergaminho."
+            return False, "Formato de e-mail inválido."
         else:
             print(f"Erro inesperado ao cadastrar usuário: {e}")
-            return False, f"Ocorreu um erro arcano ao tentar cadastrar: {error_message}"
+            return False, f"Ocorreu um erro ao tentar cadastrar: {error_message}"
 
 def login(email: str, senha: str) -> tuple[bool, str | None]:
     """
@@ -114,7 +86,7 @@ def login(email: str, senha: str) -> tuple[bool, str | None]:
     except Exception as e:
         error_message = str(e)
         if "INVALID_LOGIN_CREDENTIALS" in error_message or "EMAIL_NOT_FOUND" in error_message or "INVALID_PASSWORD" in error_message:
-            return False, "E-mail ou senha incorretos. As runas não reconhecem esta combinação."
+            return False, "E-mail ou senha incorretos."
         else:
             print(f"Erro inesperado ao fazer login: {e}")
             return False, None
@@ -141,4 +113,4 @@ def recuperar_senha(email: str) -> tuple[bool, str]:
             return False, "Este e-mail não está registrado no grimório."
         else:
             print(f"Erro inesperado ao enviar e-mail de recuperação: {e}")
-            return False, f"Ocorreu um erro arcano ao tentar enviar o e-mail: {error_message}"
+            return False, f"Ocorreu um erro ao tentar enviar o e-mail: {error_message}"

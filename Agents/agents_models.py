@@ -143,3 +143,23 @@ def agent_metric(circuit: QuantumCircuit, ideal_state: str, counts: dict) -> Cir
     depth = calculate_depth(circuit)
     gate_count = circuit.size() #conta o total de instruções no circuito (incluindo medições), útil como métrica de complexidade
     return CircuitMetrics(fidelity=fidelity, depth=depth, gate_count=gate_count)
+
+def agent_synthesizer(requirements: dict, planning: dict, metrics: dict) -> str:
+    agent_synthesizer = llama
+    prompt_agent_synthesizer = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            "You are an agent who will provide a general summary of the results of the requirements, "
+            "planning, and final metrics of the generated quantum circuits."
+        ),
+        (
+            "human",
+            "Requirements: {requirements}\n"
+            "Planning: {planning}\n"
+            "Metrics: {metrics}\n"
+            "Write a concise summary in Portuguese."
+        ),
+    ])
+    chain_agent_synthesizer = prompt_agent_synthesizer | agent_synthesizer
+    response = chain_agent_synthesizer.invoke({'requirements': requirements, 'planning': planning, 'metrics': metrics})
+    return response.content

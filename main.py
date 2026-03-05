@@ -38,7 +38,7 @@ exibir_tela_login_registro()
 if st.session_state.get('login_sucesso', False):
     mensagem_container = st.empty()
     with mensagem_container.container():
-        st.success(f"🎉 Bem-vindo ao Quantum Agents, {st.session_state.usuario}! Sua jornada mágica começa agora!")
+        st.success(f"🎉 Bem-vindo ao Quantum Agents, {st.session_state.usuario}!")
     
     time.sleep(3)
     mensagem_container.empty()
@@ -61,7 +61,8 @@ if st.session_state.get('autenticado', False):
             'autenticado', 'usuario', 'usuario_nome', 'login_sucesso',
             'active_tab', 'registration_errors', 'registration_inputs',
             'show_login_after_register', 'mensagem_erro_login',
-            'limpar_senha_login', 'login_email', 'login_senha', 'senha_counter'
+            'limpar_senha_login', 'login_email', 'login_senha', 'senha_counter',
+            'quantum_messages', 'quantum_messages_owner'
         ]
         
         for key in keys_to_clear:
