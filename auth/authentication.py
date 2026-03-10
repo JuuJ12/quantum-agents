@@ -166,7 +166,7 @@ def exibir_tela_login_registro():
                 del st.session_state.show_login_after_register 
 
             with st.form("login_form"):
-                email_login = st.text_input("Selo Mágico", key="login_email")
+                email_login = st.text_input("Usuário", key="login_email")
                 
                 # Campo de senha com controle de limpeza usando contador único
                 if not hasattr(st.session_state, 'senha_counter'):
@@ -179,7 +179,7 @@ def exibir_tela_login_registro():
                 
                 # Cria key única para forçar limpeza do campo
                 senha_key = f"login_senha_{st.session_state.senha_counter}"
-                senha_login = st.text_input("Palavra-Passe", type="password", key=senha_key)
+                senha_login = st.text_input("Senha", type="password", key=senha_key)
                 
                 # Botão sempre habilitado no formulário
                 enviar_login = st.form_submit_button("Entrar")
@@ -243,7 +243,7 @@ def exibir_tela_login_registro():
                                 # Define flag para limpar campo de senha na próxima execução
                                 st.session_state.limpar_senha_login = True
                                 # Armazena a mensagem de erro para exibir
-                                st.session_state.mensagem_erro_login = "Senha ou Palavra-Passe inválidos. Tente novamente ou inicie vá para recuperação de senha."
+                                st.session_state.mensagem_erro_login = "Usuário ou Palavra-Passe inválidos. Tente novamente ou inicie vá para recuperação de senha."
                                 st.rerun()
             
             with st.expander("Esqueci minha senha", expanded=False):
