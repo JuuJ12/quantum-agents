@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from Agents_Classes.agents_classes import StructuredCircuit, CircuitPlan, CircuitMetrics
+from Agents_Classes.agents_classes import StructuredCircuit, CircuitPlan, CircuitMetrics, VerificationResult
 load_dotenv()
 
 llama = ChatGroq(
@@ -56,6 +56,43 @@ def agent_builder(input: StructuredCircuit) -> CircuitPlan:
     chain_agent_builder = prompt_agent_builder | anget_builder
     response = chain_agent_builder.invoke({'input': input.model_dump()})
     return response
+
+
+def agent_verifier_plan(
+    requirements: StructuredCircuit,
+    plan: CircuitPlan
+) -> VerificationResult:
+    """
+    Verifies whether the CircuitPlan is coherent with the StructuredCircuit.
+    Returns approved=True if valid, otherwise approved=False with a reason.
+    """
+    verifier = llama.with_structured_output(schema=VerificationResult)
+
+    prompt_verifier = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            "You are a quantum circuit verifier. "
+            "Given the user's requirements and a proposed gate plan, "
+            "check if the plan is coherent and can achieve the objective. "
+            "Verify: correct number of qubits, gates are valid (only h, x, cx), "
+            "cx gates have distinct control and target qubits, "
+            "and the plan is likely to produce the target state. "
+            "Return approved=True if the plan is correct, "
+            "or approved=False with a clear reason if something is wrong."
+        ),
+        (
+            "human",
+            "Requirements: {requirements}\n"
+            "Proposed plan: {plan}"
+        )
+    ])
+
+    chain = prompt_verifier | verifier
+    result = chain.invoke({
+        "requirements": requirements.model_dump(),
+        "plan": plan.model_dump()
+    })
+    return result
 
 def agent_executor_circuit(input: CircuitPlan):
     used_qubits = []
@@ -163,3 +200,103 @@ def agent_synthesizer(requirements: dict, planning: dict, metrics: dict) -> str:
     chain_agent_synthesizer = prompt_agent_synthesizer | agent_synthesizer
     response = chain_agent_synthesizer.invoke({'requirements': requirements, 'planning': planning, 'metrics': metrics})
     return response.content
+
+
+def agent_verifier_execution(
+    counts: dict,
+    requirements: StructuredCircuit,
+    metrics: "CircuitMetrics"
+) -> VerificationResult:
+    """
+    Verifies whether the simulation counts are compatible with the objective.
+    Uses deterministic rules instead of an LLM.
+    """
+    total_shots = sum(counts.values())
+    if total_shots == 0:
+        return VerificationResult(
+            approved=False,
+            reason="Simulação retornou zero shots."
+        )
+
+    fidelity_threshold = 0.4
+
+    if metrics.fidelity < fidelity_threshold:
+        dominant_state = max(counts, key=counts.get)
+        dominant_pct = round(counts[dominant_state] / total_shots * 100, 1)
+        return VerificationResult(
+            approved=False,
+            reason=(
+                f"Fidelidade baixa ({metrics.fidelity:.2f}). "
+                f"Estado dominante: |{dominant_state}⟩ com {dominant_pct}%. "
+                f"Estado alvo esperado: {requirements.target_state}."
+            )
+        )
+
+    return VerificationResult(approved=True)
+
+
+def run_quantum_pipeline(
+    user_prompt: str,
+    max_attempts: int = 3
+) -> dict:
+    """
+    Executes the full pipeline with verification and retry.
+    Returns a dict with all results, or raises RuntimeError if a valid
+    circuit cannot be produced after max_attempts.
+    """
+
+    requirements = agent_extrator(user_prompt)
+    last_rejection_reason = None
+
+    for attempt in range(1, max_attempts + 1):
+        if last_rejection_reason:
+            feedback_input = requirements.model_copy(update={
+                "objective": (
+                    f"{requirements.objective} "
+                    f"[CORREÇÃO NECESSÁRIA - tentativa {attempt}: {last_rejection_reason}]"
+                )
+            })
+            plan = agent_builder(feedback_input)
+        else:
+            plan = agent_builder(requirements)
+
+        plan_check = agent_verifier_plan(requirements, plan)
+        if not plan_check.approved:
+            last_rejection_reason = f"Plano inválido: {plan_check.reason}"
+            continue
+
+        try:
+            qc, counts, image_bytes = agent_executor_circuit(plan)
+        except Exception as exc:
+            last_rejection_reason = f"Erro na execução do circuito: {str(exc)}"
+            continue
+
+        metrics = agent_metric(qc, requirements.target_state, counts)
+
+        exec_check = agent_verifier_execution(counts, requirements, metrics)
+        if not exec_check.approved:
+            last_rejection_reason = f"Resultado inválido: {exec_check.reason}"
+            continue
+
+        summary = agent_synthesizer(
+            requirements=requirements.model_dump(),
+            planning=plan.model_dump(),
+            metrics=metrics.model_dump()
+        )
+
+        return {
+            "success": True,
+            "attempts": attempt,
+            "requirements": requirements,
+            "plan": plan,
+            "qc": qc,
+            "counts": counts,
+            "image_bytes": image_bytes,
+            "metrics": metrics,
+            "summary": summary,
+        }
+
+    raise RuntimeError(
+        f"Não foi possível construir um circuito válido após {max_attempts} tentativas. "
+        f"Último problema: {last_rejection_reason}"
+    )

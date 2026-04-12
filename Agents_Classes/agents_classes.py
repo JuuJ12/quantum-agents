@@ -17,7 +17,7 @@ class Gate(BaseModel): # estrutura de dados para a construção do circuito. Par
     )
 
 
-class CircuitPlan(BaseModel): # esturura da lista de portas que o agente construtor vai retornar, ou seja, a lista de portas que ele vai aplicar no circuito para atingir o objetivo do usuário
+class CircuitPlan(BaseModel): # estrutura da lista de portas que o agente construtor vai retornar, ou seja, a lista de portas que ele vai aplicar no circuito para atingir o objetivo do usuário
     gates: List[Gate] = Field(
         description="List of quantum gates to be applied in the circuit"
     )
@@ -26,4 +26,9 @@ class CircuitMetrics(BaseModel):
         fidelity: float = Field(description="Fidelity of the executed circuit compared to the target state"),
         depth: int = Field(description="Depth of the executed circuit"),
         gate_count: int = Field(description="Total number of gates used in the executed circuit")
+
+
+class VerificationResult(BaseModel):
+    approved: bool
+    reason: Optional[str] = None
     

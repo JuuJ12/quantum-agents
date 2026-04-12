@@ -175,3 +175,4 @@ cython_debug/
 quantum-agents-firebase_auth.json
 quantum-agents-firebasekey.json
 .gitignore
+RELATORIO_TECNICO.md

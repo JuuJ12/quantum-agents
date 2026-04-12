@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import base64
 import re
 import streamlit as st
-from Agents.agents_models import agent_extrator, agent_builder, agent_executor_circuit, agent_metric,agent_synthesizer
+from Agents.agents_models import run_quantum_pipeline
 from auth.firebase_store import save_quantum_messages, load_quantum_messages
 
 load_dotenv()
@@ -164,45 +164,42 @@ if executar and user_prompt:
 
         st.rerun()
 
-    with st.spinner("Processando..."):
-        circuit_requirements = agent_extrator(user_prompt) #model dump é um método do pydantic que converte o modelo em um dicionário, facilitando a visualização dos dados estruturados retornados pelo agente_extrator
-   
-    with st.spinner("Gerando plano do circuito..."):
-        circuit_plan = agent_builder(circuit_requirements)
+    with st.spinner("Processando circuito quântico..."):
+        try:
+            result = run_quantum_pipeline(user_prompt, max_attempts=3)
 
-    with st.spinner("Executando circuito..."):
-        qc, counts, circuit_image_bytes = agent_executor_circuit(circuit_plan)
-        
-    with st.spinner("Calculando métricas..."):
-        metrics = agent_metric(qc, circuit_requirements.target_state, counts)
+            circuit_text = str(result["qc"].draw(output="text"))
+            circuit_image_base64 = _encode_image_to_base64(result["image_bytes"])
 
-    with st.spinner("Resumindo resultados..."):
-        summary = agent_synthesizer(
-            requirements=circuit_requirements.model_dump(),
-            planning=circuit_plan.model_dump(),
-            metrics=metrics.model_dump()
-        )
+            if result["attempts"] >=1:
+                st.info(
+                    f"Circuito gerado com sucesso após {result['attempts']} tentativas de refinamento."
+                )
 
-    circuit_text = str(qc.draw(output="text"))
-    circuit_image_base64 = _encode_image_to_base64(circuit_image_bytes)
+            message_record = {
+                "prompt": user_prompt,
+                "requirements": result["requirements"].model_dump(),
+                "planning": result["plan"].model_dump(),
+                "metrics": result["metrics"].model_dump(),
+                "results": result["counts"],
+                "summary": result["summary"],
+                "circuit_text": circuit_text,
+                "circuit_image_base64": circuit_image_base64,
+                "message_type": "circuit_response",
+            }
 
-    message_record = {
-        "prompt": user_prompt,
-        "requirements": circuit_requirements.model_dump(),
-        "planning": circuit_plan.model_dump(),
-        "metrics": metrics.model_dump(),
-        "results": counts,
-        "summary": summary,
-        "circuit_text": circuit_text,
-        "circuit_image_base64": circuit_image_base64,
-        "message_type": "circuit_response",
-    }
+        except RuntimeError as e:
+            message_record = {
+                "prompt": user_prompt,
+                "summary": str(e),
+                "message_type": "off_topic",
+            }
+
     st.session_state.setdefault("quantum_messages", []).append(message_record)
 
     if usuario_email:
         try:
             salvar_mensagens_quantum(usuario_email, st.session_state["quantum_messages"])
-            st.success("Historico salvo no Firebase.")
         except Exception as e:
             st.error(f"Falha ao salvar no Firebase: {e}")
 
