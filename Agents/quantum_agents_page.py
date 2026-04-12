@@ -166,7 +166,7 @@ if executar and user_prompt:
 
     with st.spinner("Processando circuito quântico..."):
         try:
-            result = run_quantum_pipeline(user_prompt, max_attempts=3)
+            result = run_quantum_pipeline(user_prompt, max_attempts=5)
 
             circuit_text = str(result["qc"].draw(output="text"))
             circuit_image_base64 = _encode_image_to_base64(result["image_bytes"])
@@ -181,7 +181,7 @@ if executar and user_prompt:
                 "requirements": result["requirements"].model_dump(),
                 "planning": result["plan"].model_dump(),
                 "metrics": result["metrics"].model_dump(),
-                "results": result["counts"],
+                "results": result["measurement_counts"],
                 "summary": result["summary"],
                 "circuit_text": circuit_text,
                 "circuit_image_base64": circuit_image_base64,

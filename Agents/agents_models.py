@@ -62,10 +62,6 @@ def agent_verifier_plan(
     requirements: StructuredCircuit,
     plan: CircuitPlan
 ) -> VerificationResult:
-    """
-    Verifies whether the CircuitPlan is coherent with the StructuredCircuit.
-    Returns approved=True if valid, otherwise approved=False with a reason.
-    """
     verifier = llama.with_structured_output(schema=VerificationResult)
 
     prompt_verifier = ChatPromptTemplate.from_messages([
@@ -132,7 +128,7 @@ def agent_executor_circuit(input: CircuitPlan):
     simulator = AerSimulator()
     compiled_circuit = transpile(qc, simulator)
     result = simulator.run(compiled_circuit, shots=1024).result()
-    counts = result.get_counts(compiled_circuit) #serve para contar quantas vezes cada resultado foi obtido na execução do circuito, ou seja, ele vai contar quantas vezes obteve 00, 01, 10 e 11, por exemplo, se for um circuito de 2 qubits
+    measurement_counts = result.get_counts(compiled_circuit) #serve para contar quantas vezes cada resultado foi obtido na execução do circuito, ou seja, ele vai contar quantas vezes obteve 00, 01, 10 e 11, por exemplo, se for um circuito de 2 qubits
 
     circuit_image_bytes = None
     try:
@@ -144,39 +140,95 @@ def agent_executor_circuit(input: CircuitPlan):
     except Exception:
         circuit_image_bytes = None
 
-    return qc, counts, circuit_image_bytes
+    return qc, measurement_counts, circuit_image_bytes
 
-def _normalize_target_state(target_state: str) -> str:
-    cleaned = target_state.strip().lower().replace("|", "").replace(">", "")
-    cleaned = cleaned.replace(" ", "")
+def _normalize_target_state(target_state: str) -> str: #serve para normalizar o estado alvo desejado pelo usuário, ou seja, ele vai remover espaços, barras e outros caracteres para facilitar a comparação com os resultados obtidos na execução do circuito
+    cleaned = target_state.strip().lower()
+    cleaned = cleaned.replace("|", "").replace(">", "").replace(" ", "")
     return cleaned
 
 
-def calculate_fidelity(counts: dict, ideal_state: str) -> float:
-    # For measured circuits, use probability mass on expected outcomes.
-    if not counts:
+def _is_entangled_target(target: str) -> bool: #serve para verificar se o estado alvo desejado pelo usuário é um estado emaranhado, ou seja, ele vai procurar por palavras-chave relacionadas a estados emaranhados para determinar se o objetivo do circuito é criar um estado emaranhado ou não
+    keywords = (
+        "entangled",
+        "bell",
+        "phi",
+        "psi",
+        "emaranhado",
+        "epr",
+        "ghz",
+        "greenberger",
+        "w_state",
+    )
+    return any(keyword in target for keyword in keywords)
+
+
+def _is_superposition_target(target: str) -> bool: #serve para verificar se o estado alvo desejado pelo usuário é um estado de superposição, ou seja, ele vai procurar por palavras-chave relacionadas a estados de superposição para determinar se o objetivo do circuito é criar um estado de superposição ou não
+    keywords = ("superposition", "superposicao", "+", "hadamard", "uniform")
+    return any(keyword in target for keyword in keywords)
+
+
+def _reverse_bitstring(state: str) -> str: #serve para corrigir a convenção de bitstring do Qiskit invertendo a ordem dos qubits, ou seja, ele vai pegar o resultado obtido na execução do circuito e inverter a ordem dos bits para que fique no formato esperado pelo usuário, já que o Qiskit usa uma convenção onde o qubit 0 é o mais à direita na representação de bitstring, enquanto os usuários geralmente esperam que o qubit 0 seja o mais à esquerda. Portanto, essa função inverte a string de bits para alinhar com as expectativas do usuário.
+
+    return state[::-1]
+
+
+def _infer_n_qubits(measurement_counts: dict) -> int: #serve para inferir o número de qubits a partir do comprimento das chaves do dicionário de contagens, ou seja, ele vai olhar para as chaves do dicionário de contagens (que representam os resultados obtidos na execução do circuito) e inferir quantos qubits foram usados no circuito com base no comprimento dessas chaves, já que cada chave representa um estado possível dos qubits e o comprimento da chave indica quantos qubits estão envolvidos.
+    if not measurement_counts:
+        return 0
+    return len(next(iter(measurement_counts))) # serve para obter o comprimento da primeira chave do dicionário de contagens, ou seja, ele vai pegar a primeira chave do dicionário (que representa um estado possível dos qubits) e retornar o comprimento dessa chave para inferir quantos qubits foram usados no circuito, já que cada bit na chave representa o estado de um qubit.
+
+
+def calculate_fidelity(measurement_counts: dict, ideal_state: str) -> float:#serve para calcular a fidelidade entre os resultados obtidos na execução do circuito e o estado alvo desejado pelo usuário, usando regras heurísticas para diferentes tipos de estados (emaranhados, superposição, estados computacionais), ou seja, ele vai comparar as contagens obtidas na execução do circuito com o estado alvo desejado pelo usuário e calcular uma métrica de fidelidade que indica o quão próximo o resultado está do objetivo, usando diferentes critérios dependendo do tipo de estado que o usuário deseja criar.
+    
+    if not measurement_counts:
         return 0.0
 
-    target = _normalize_target_state(ideal_state)
-    total_shots = sum(counts.values())
+    total_shots = sum(measurement_counts.values())
     if total_shots == 0:
         return 0.0
 
-    # If the target is a descriptive Bell/entangled request, use correlated/anti-correlated outcomes.
-    entangled_keywords = ("entangled", "bell", "phi", "psi")
-    if any(keyword in target for keyword in entangled_keywords):
-        correlated = counts.get("00", 0) + counts.get("11", 0)
-        anticorrelated = counts.get("01", 0) + counts.get("10", 0)
-        return float(max(correlated, anticorrelated) / total_shots)
+    target = _normalize_target_state(ideal_state)
 
-    hits = counts.get(target, 0)
+    
+    if "ghz" in target or "greenberger" in target:
+        n_qubits = _infer_n_qubits(measurement_counts)
+        if n_qubits == 0:
+            return 0.0
+        all_zeros = "0" * n_qubits
+        all_ones = "1" * n_qubits
+        ghz_shots = measurement_counts.get(all_zeros, 0) + measurement_counts.get(all_ones, 0)
+        return float(ghz_shots / total_shots)
+
+    
+    if _is_entangled_target(target):
+        correlated = measurement_counts.get("00", 0) + measurement_counts.get("11", 0)
+        anticorrelated = measurement_counts.get("01", 0) + measurement_counts.get("10", 0)
+        best = max(correlated, anticorrelated)
+        return float(best / total_shots)
+
+    
+    if _is_superposition_target(target):
+        n_states = len(measurement_counts)
+        if n_states == 0:
+            return 0.0
+
+        expected = total_shots / n_states
+        deviation = sum(abs(value - expected) for value in measurement_counts.values())
+        uniformity = 1.0 - (deviation / (2 * total_shots))
+        return float(max(0.0, uniformity))
+
+    # Case 4: Specific computational-basis state.
+    direct_hits = measurement_counts.get(target, 0)
+    reversed_hits = measurement_counts.get(_reverse_bitstring(target), 0)
+    hits = max(direct_hits, reversed_hits)
     return float(hits / total_shots)
 
 def calculate_depth(circuit: QuantumCircuit) -> int:
     return circuit.depth()  #retorna a profundidade do circuito, ou seja, ele vai contar quantas camadas de portas existem no circuito para dar uma medida da complexidade do circuito
 
-def agent_metric(circuit: QuantumCircuit, ideal_state: str, counts: dict) -> CircuitMetrics:
-    fidelity = calculate_fidelity(counts, ideal_state)
+def agent_metric(circuit: QuantumCircuit, ideal_state: str, measurement_counts: dict) -> CircuitMetrics:
+    fidelity = calculate_fidelity(measurement_counts, ideal_state)
     depth = calculate_depth(circuit)
     gate_count = circuit.size() #conta o total de instruções no circuito (incluindo medições), útil como métrica de complexidade
     return CircuitMetrics(fidelity=fidelity, depth=depth, gate_count=gate_count)
@@ -203,7 +255,7 @@ def agent_synthesizer(requirements: dict, planning: dict, metrics: dict) -> str:
 
 
 def agent_verifier_execution(
-    counts: dict,
+    measurement_counts: dict,
     requirements: StructuredCircuit,
     metrics: "CircuitMetrics"
 ) -> VerificationResult:
@@ -211,7 +263,7 @@ def agent_verifier_execution(
     Verifies whether the simulation counts are compatible with the objective.
     Uses deterministic rules instead of an LLM.
     """
-    total_shots = sum(counts.values())
+    total_shots = sum(measurement_counts.values())
     if total_shots == 0:
         return VerificationResult(
             approved=False,
@@ -221,8 +273,8 @@ def agent_verifier_execution(
     fidelity_threshold = 0.4
 
     if metrics.fidelity < fidelity_threshold:
-        dominant_state = max(counts, key=counts.get)
-        dominant_pct = round(counts[dominant_state] / total_shots * 100, 1)
+        dominant_state = max(measurement_counts, key=measurement_counts.get)
+        dominant_pct = round(measurement_counts[dominant_state] / total_shots * 100, 1)
         return VerificationResult(
             approved=False,
             reason=(
@@ -266,14 +318,14 @@ def run_quantum_pipeline(
             continue
 
         try:
-            qc, counts, image_bytes = agent_executor_circuit(plan)
+            qc, measurement_counts, image_bytes = agent_executor_circuit(plan)
         except Exception as exc:
             last_rejection_reason = f"Erro na execução do circuito: {str(exc)}"
             continue
 
-        metrics = agent_metric(qc, requirements.target_state, counts)
+        metrics = agent_metric(qc, requirements.target_state, measurement_counts)
 
-        exec_check = agent_verifier_execution(counts, requirements, metrics)
+        exec_check = agent_verifier_execution(measurement_counts, requirements, metrics)
         if not exec_check.approved:
             last_rejection_reason = f"Resultado inválido: {exec_check.reason}"
             continue
@@ -290,7 +342,7 @@ def run_quantum_pipeline(
             "requirements": requirements,
             "plan": plan,
             "qc": qc,
-            "counts": counts,
+            "measurement_counts": measurement_counts,
             "image_bytes": image_bytes,
             "metrics": metrics,
             "summary": summary,
