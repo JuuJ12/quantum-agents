@@ -177,7 +177,14 @@ def _infer_n_qubits(measurement_counts: dict) -> int: #serve para inferir o núm
     if not measurement_counts:
         return 0
     return len(next(iter(measurement_counts))) # serve para obter o comprimento da primeira chave do dicionário de contagens, ou seja, ele vai pegar a primeira chave do dicionário (que representa um estado possível dos qubits) e retornar o comprimento dessa chave para inferir quantos qubits foram usados no circuito, já que cada bit na chave representa o estado de um qubit.
+            # 1. iter(measurement_counts)
+            # Cria um iterador sobre as CHAVES do dicionário (não os valores)
 
+            # 2. next(...)
+            # Pega o próximo elemento do iterador — neste caso, a primeira chave
+
+            # 3. len(...)
+            # Retorna o comprimento dessa chave (que é uma string)
 
 def calculate_fidelity(measurement_counts: dict, ideal_state: str) -> float:#serve para calcular a fidelidade entre os resultados obtidos na execução do circuito e o estado alvo desejado pelo usuário, usando regras heurísticas para diferentes tipos de estados (emaranhados, superposição, estados computacionais), ou seja, ele vai comparar as contagens obtidas na execução do circuito com o estado alvo desejado pelo usuário e calcular uma métrica de fidelidade que indica o quão próximo o resultado está do objetivo, usando diferentes critérios dependendo do tipo de estado que o usuário deseja criar.
     
@@ -197,7 +204,7 @@ def calculate_fidelity(measurement_counts: dict, ideal_state: str) -> float:#ser
             return 0.0
         all_zeros = "0" * n_qubits
         all_ones = "1" * n_qubits
-        ghz_shots = measurement_counts.get(all_zeros, 0) + measurement_counts.get(all_ones, 0)
+        ghz_shots = measurement_counts.get(all_zeros, 0) + measurement_counts.get(all_ones, 0) # pega o valor da chave correspondente ao estado |00...0⟩ (todos os qubits em 0) e o valor da chave correspondente ao estado |11...1⟩ (todos os qubits em 1), e soma esses valores para obter o número total de vezes que o circuito produziu um desses dois estados, que são os estados esperados para um estado GHZ ideal. A fidelidade é então calculada como a proporção desses "hits" de GHZ em relação ao número total de execuções (total_shots), indicando o quão próximo o resultado está do estado GHZ ideal.
         return float(ghz_shots / total_shots)
 
     
@@ -214,11 +221,10 @@ def calculate_fidelity(measurement_counts: dict, ideal_state: str) -> float:#ser
             return 0.0
 
         expected = total_shots / n_states
-        deviation = sum(abs(value - expected) for value in measurement_counts.values())
-        uniformity = 1.0 - (deviation / (2 * total_shots))
+        deviation = sum(abs(value - expected) for value in measurement_counts.values()) # serve para calcular a soma das diferenças absolutas entre o número de vezes que cada estado foi obtido na execução do circuito (value) e o número esperado de vezes para um estado de superposição ideal (expected), que é o total de execuções dividido pelo número de estados possíveis. Essa métrica de desvio é usada para avaliar o quão uniforme é a distribuição dos resultados, já que um estado de superposição ideal deve produzir uma distribuição uniforme entre os estados possíveis. A fidelidade é então calculada como 1 menos a proporção desse desvio em relação ao número total de execuções, indicando o quão próximo o resultado está de uma superposição ideal.
+        uniformity = 1.0 - (deviation / (2 * total_shots)) # serve para calcular a fidelidade com base na uniformidade da distribuição dos resultados, onde o desvio é normalizado pelo número total de execuções (total_shots) e multiplicado por 2 para levar em conta a escala da métrica. A fidelidade é então calculada como 1 menos essa proporção de desvio, indicando o quão próximo o resultado está de uma superposição ideal, onde uma fidelidade de 1 indicaria uma distribuição perfeitamente uniforme entre os estados possíveis. Se a uniformidade for negativa (o que pode ocorrer se a distribuição for muito desigual), a função retorna 0.0 para garantir que a fidelidade seja sempre um valor entre 0 e 1.
         return float(max(0.0, uniformity))
 
-    # Case 4: Specific computational-basis state.
     direct_hits = measurement_counts.get(target, 0)
     reversed_hits = measurement_counts.get(_reverse_bitstring(target), 0)
     hits = max(direct_hits, reversed_hits)
