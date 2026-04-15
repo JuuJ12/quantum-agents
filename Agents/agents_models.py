@@ -10,12 +10,19 @@ from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
 from qiskit import transpile
 import numpy as np
-
+from Agents_Classes.agents_classes import (
+    StructuredCircuit,
+    CircuitPlan,
+    CircuitMetrics,
+    VerificationResult,
+    CircuitType,
+    IsQuantumAwnser,
+)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from Agents_Classes.agents_classes import StructuredCircuit, CircuitPlan, CircuitMetrics, VerificationResult
+
 load_dotenv()
 
 llama = ChatGroq(
@@ -30,11 +37,30 @@ groq_comp = ChatGroq(
     temperature= 0.0
 )
 
+def agent_verifier_if_is_quantum_awnser(input: str) -> IsQuantumAwnser:
+    agent_verifier = llama.with_structured_output(schema=IsQuantumAwnser)
+    prompt_agent_verifier = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            "You are an expert in identifying whether a user's question is related to quantum computing. "
+            "Analyze the question and determine if it is asking for something related to quantum computing concepts, circuits, qubits, or similar topics. "
+            "Return structured output with a boolean field 'is_quantum' indicating if the question is about quantum computing or not."
+        ),
+        ("human", "{input}")
+    ])
+    chain_agent_verifier = prompt_agent_verifier | agent_verifier
+    response = chain_agent_verifier.invoke({'input': input})
+    return response
+
 def agent_extrator(input: str) -> StructuredCircuit:
     agent_extrator = llama.with_structured_output(schema=StructuredCircuit)
     prompt_agent_extrator =  ChatPromptTemplate.from_messages([
-        ("system", "You are an expert quantum circuit interpreter." \
-                                "Extract only structured circuit requirements."),
+        (
+            "system",
+            "You are an expert quantum circuit interpreter. "
+            "Extract only structured circuit requirements and classify circuit_type. "
+            "circuit_type must be one of: computational, bell, ghz, superposition."
+        ),
         ("human", "{input}")
     ])
     chain_agent_extrator = prompt_agent_extrator | agent_extrator
@@ -48,7 +74,9 @@ def agent_builder(input: StructuredCircuit) -> CircuitPlan:
         "system",
         "You are a quantum circuit designer. "
         "Generate a list of quantum gates to satisfy the objective. "
-        "Only use gates: h, x, cx. "
+        "Only use gates: h, x, cx, rz. "
+        "If you use rz, include theta (in radians) for each rz gate. "
+        "Do not include control_qubits for rz. "
         "Return structured output only."
     ),
     ("human", "{input}")
@@ -70,8 +98,9 @@ def agent_verifier_plan(
             "You are a quantum circuit verifier. "
             "Given the user's requirements and a proposed gate plan, "
             "check if the plan is coherent and can achieve the objective. "
-            "Verify: correct number of qubits, gates are valid (only h, x, cx), "
+            "Verify: correct number of qubits, gates are valid (only h, x, cx, rz), "
             "cx gates have distinct control and target qubits, "
+            "rz gates include theta, "
             "and the plan is likely to produce the target state. "
             "Return approved=True if the plan is correct, "
             "or approved=False with a clear reason if something is wrong."
@@ -123,6 +152,12 @@ def agent_executor_circuit(input: CircuitPlan):
                 for target in gate.target_qubits:
                     qc.cx(control, target)
 
+        elif gate.gate_name == "rz":
+            if gate.theta is None:
+                raise ValueError("Gate 'rz' requer parâmetro theta (em radianos).")
+            for target in gate.target_qubits:
+                qc.rz(gate.theta, target)
+
     qc.measure(range(num_qubits), range(num_qubits))
 
     simulator = AerSimulator()
@@ -168,6 +203,16 @@ def _is_superposition_target(target: str) -> bool: #serve para verificar se o es
     return any(keyword in target for keyword in keywords)
 
 
+def _infer_circuit_type_from_target(target: str) -> CircuitType:
+    if "ghz" in target or "greenberger" in target:
+        return CircuitType.GHZ
+    if _is_entangled_target(target):
+        return CircuitType.BELL
+    if _is_superposition_target(target):
+        return CircuitType.SUPERPOSITION
+    return CircuitType.COMPUTATIONAL
+
+
 def _reverse_bitstring(state: str) -> str: #serve para corrigir a convenção de bitstring do Qiskit invertendo a ordem dos qubits, ou seja, ele vai pegar o resultado obtido na execução do circuito e inverter a ordem dos bits para que fique no formato esperado pelo usuário, já que o Qiskit usa uma convenção onde o qubit 0 é o mais à direita na representação de bitstring, enquanto os usuários geralmente esperam que o qubit 0 seja o mais à esquerda. Portanto, essa função inverte a string de bits para alinhar com as expectativas do usuário.
 
     return state[::-1]
@@ -186,7 +231,11 @@ def _infer_n_qubits(measurement_counts: dict) -> int: #serve para inferir o núm
             # 3. len(...)
             # Retorna o comprimento dessa chave (que é uma string)
 
-def calculate_fidelity(measurement_counts: dict, ideal_state: str) -> float:#serve para calcular a fidelidade entre os resultados obtidos na execução do circuito e o estado alvo desejado pelo usuário, usando regras heurísticas para diferentes tipos de estados (emaranhados, superposição, estados computacionais), ou seja, ele vai comparar as contagens obtidas na execução do circuito com o estado alvo desejado pelo usuário e calcular uma métrica de fidelidade que indica o quão próximo o resultado está do objetivo, usando diferentes critérios dependendo do tipo de estado que o usuário deseja criar.
+def calculate_fidelity(
+    measurement_counts: dict,
+    ideal_state: str,
+    circuit_type: Optional[CircuitType] = None,
+) -> float: #serve para calcular a fidelidade entre os resultados obtidos na execução do circuito e o estado alvo desejado pelo usuário, usando regras heurísticas para diferentes tipos de estados (emaranhados, superposição, estados computacionais), ou seja, ele vai comparar as contagens obtidas na execução do circuito com o estado alvo desejado pelo usuário e calcular uma métrica de fidelidade que indica o quão próximo o resultado está do objetivo, usando diferentes critérios dependendo do tipo de estado que o usuário deseja criar.
     
     if not measurement_counts:
         return 0.0
@@ -196,9 +245,10 @@ def calculate_fidelity(measurement_counts: dict, ideal_state: str) -> float:#ser
         return 0.0
 
     target = _normalize_target_state(ideal_state)
+    resolved_type = circuit_type or _infer_circuit_type_from_target(target)
 
-    
-    if "ghz" in target or "greenberger" in target:
+
+    if resolved_type == CircuitType.GHZ:
         n_qubits = _infer_n_qubits(measurement_counts)
         if n_qubits == 0:
             return 0.0
@@ -207,15 +257,15 @@ def calculate_fidelity(measurement_counts: dict, ideal_state: str) -> float:#ser
         ghz_shots = measurement_counts.get(all_zeros, 0) + measurement_counts.get(all_ones, 0) # pega o valor da chave correspondente ao estado |00...0⟩ (todos os qubits em 0) e o valor da chave correspondente ao estado |11...1⟩ (todos os qubits em 1), e soma esses valores para obter o número total de vezes que o circuito produziu um desses dois estados, que são os estados esperados para um estado GHZ ideal. A fidelidade é então calculada como a proporção desses "hits" de GHZ em relação ao número total de execuções (total_shots), indicando o quão próximo o resultado está do estado GHZ ideal.
         return float(ghz_shots / total_shots)
 
-    
-    if _is_entangled_target(target):
+
+    if resolved_type == CircuitType.BELL:
         correlated = measurement_counts.get("00", 0) + measurement_counts.get("11", 0)
         anticorrelated = measurement_counts.get("01", 0) + measurement_counts.get("10", 0)
         best = max(correlated, anticorrelated)
         return float(best / total_shots)
 
-    
-    if _is_superposition_target(target):
+
+    if resolved_type == CircuitType.SUPERPOSITION:
         n_states = len(measurement_counts)
         if n_states == 0:
             return 0.0
@@ -233,8 +283,12 @@ def calculate_fidelity(measurement_counts: dict, ideal_state: str) -> float:#ser
 def calculate_depth(circuit: QuantumCircuit) -> int:
     return circuit.depth()  #retorna a profundidade do circuito, ou seja, ele vai contar quantas camadas de portas existem no circuito para dar uma medida da complexidade do circuito
 
-def agent_metric(circuit: QuantumCircuit, ideal_state: str, measurement_counts: dict) -> CircuitMetrics:
-    fidelity = calculate_fidelity(measurement_counts, ideal_state)
+def agent_metric(circuit: QuantumCircuit, requirements: StructuredCircuit, measurement_counts: dict) -> CircuitMetrics:
+    fidelity = calculate_fidelity(
+        measurement_counts,
+        requirements.target_state,
+        requirements.circuit_type,
+    )
     depth = calculate_depth(circuit)
     gate_count = circuit.size() #conta o total de instruções no circuito (incluindo medições), útil como métrica de complexidade
     return CircuitMetrics(fidelity=fidelity, depth=depth, gate_count=gate_count)
@@ -265,10 +319,6 @@ def agent_verifier_execution(
     requirements: StructuredCircuit,
     metrics: "CircuitMetrics"
 ) -> VerificationResult:
-    """
-    Verifies whether the simulation counts are compatible with the objective.
-    Uses deterministic rules instead of an LLM.
-    """
     total_shots = sum(measurement_counts.values())
     if total_shots == 0:
         return VerificationResult(
@@ -329,7 +379,7 @@ def run_quantum_pipeline(
             last_rejection_reason = f"Erro na execução do circuito: {str(exc)}"
             continue
 
-        metrics = agent_metric(qc, requirements.target_state, measurement_counts)
+        metrics = agent_metric(qc, requirements, measurement_counts)
 
         exec_check = agent_verifier_execution(measurement_counts, requirements, metrics)
         if not exec_check.approved:

@@ -1,8 +1,7 @@
 from dotenv import load_dotenv
 import base64
-import re
 import streamlit as st
-from Agents.agents_models import run_quantum_pipeline
+from Agents.agents_models import run_quantum_pipeline, agent_verifier_if_is_quantum_awnser
 from auth.firebase_store import save_quantum_messages, load_quantum_messages
 
 load_dotenv()
@@ -46,25 +45,6 @@ def _planning_to_text(planning):
         controls = gate.get("control_qubits")
         lines.append(f"{idx}. gate={gate_name} targets={targets} controls={controls}")
     return "\n".join(lines)
-
-
-def _is_quantum_circuit_prompt(prompt):
-    if not prompt:
-        return False
-
-    normalized = prompt.lower()
-    keywords = [
-        "quantum", "quantico", "qubit", "qubits", "circuit", "circuito",
-        "qiskit", "hadamard", "entanglement", "entangled", "bell",
-        "superposition", "medicao", "measurement", "cx", "h ", " x ",
-    ]
-    if any(word in normalized for word in keywords):
-        return True
-
-    # Heuristica adicional para gate+qubit no texto.
-    has_gate = bool(re.search(r"\b(h|x|cx|cz|swap)\b", normalized))
-    has_qubit_index = bool(re.search(r"q\d+|qubit\s*\d+", normalized))
-    return has_gate and has_qubit_index
 
 
 def _build_off_topic_response():
@@ -147,7 +127,12 @@ with st.form("quantum_circuit_form"):
     executar = st.form_submit_button("Executar circuito")
 
 if executar and user_prompt:
-    if not _is_quantum_circuit_prompt(user_prompt):
+    try:
+        is_quantum = agent_verifier_if_is_quantum_awnser(user_prompt).is_quantum
+    except Exception:
+        is_quantum = False
+
+    if not is_quantum:
         message_record = {
             "prompt": user_prompt,
             "summary": _build_off_topic_response(),
