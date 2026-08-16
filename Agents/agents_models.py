@@ -18,14 +18,6 @@ from Agents_Classes.agents_classes import (
     CircuitType,
     IsQuantumAwnser,
 )
-
-from auth.firebase_store import load_quantum_messages
-
-from langchain_text_splitters import (CharacterTextSplitter, RecursiveCharacterTextSplitter)
-from langchain_experimental.text_splitter import SemanticChunker
-from langchain_community.embeddings import HuggingFaceBgeEmbeddings
-
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -33,8 +25,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 load_dotenv()
 
-gpt_oss = ChatGroq(
-    model="GPT OSS 120B",
+llama = ChatGroq(
+    model="llama-3.3-70b-versatile",
     api_key=(os.getenv("GROQ_API_KEY")),
     temperature= 0.0,
 )
@@ -46,7 +38,7 @@ groq_comp = ChatGroq(
 )
 
 def agent_verifier_if_is_quantum_awnser(input: str) -> IsQuantumAwnser:
-    agent_verifier = gpt_oss.with_structured_output(schema=IsQuantumAwnser)
+    agent_verifier = llama.with_structured_output(schema=IsQuantumAwnser)
     prompt_agent_verifier = ChatPromptTemplate.from_messages([
         (
             "system",
@@ -61,7 +53,7 @@ def agent_verifier_if_is_quantum_awnser(input: str) -> IsQuantumAwnser:
     return response
 
 def agent_extrator(input: str) -> StructuredCircuit:
-    agent_extrator = gpt_oss.with_structured_output(schema=StructuredCircuit)
+    agent_extrator = llama.with_structured_output(schema=StructuredCircuit)
     prompt_agent_extrator =  ChatPromptTemplate.from_messages([
         (
             "system",
@@ -76,7 +68,7 @@ def agent_extrator(input: str) -> StructuredCircuit:
     return response
 
 def agent_builder(input: StructuredCircuit) -> CircuitPlan:
-    anget_builder = gpt_oss.with_structured_output(schema=CircuitPlan)
+    anget_builder = llama.with_structured_output(schema=CircuitPlan)
     prompt_agent_builder = ChatPromptTemplate.from_messages([
     (
         "system",
@@ -94,8 +86,11 @@ def agent_builder(input: StructuredCircuit) -> CircuitPlan:
     return response
 
 
-def agent_verifier_plan(requirements: StructuredCircuit,plan: CircuitPlan) -> VerificationResult:
-    verifier = gpt_oss.with_structured_output(schema=VerificationResult)
+def agent_verifier_plan(
+    requirements: StructuredCircuit,
+    plan: CircuitPlan
+) -> VerificationResult:
+    verifier = llama.with_structured_output(schema=VerificationResult)
 
     prompt_verifier = ChatPromptTemplate.from_messages([
         (
@@ -165,8 +160,8 @@ def agent_executor_circuit(input: CircuitPlan):
 
     qc.measure(range(num_qubits), range(num_qubits))
 
-    simulator = AerSimulator() # serve para criar uma instância do simulador Aer do Qiskit, que é usado para simular a execução do circuito quântico e obter os resultados das medições.
-    compiled_circuit = transpile(qc, simulator) #serve para transpilar o circuito quântico para o formato compatível com o simulador Aer, ou seja, ele vai otimizar e converter o circuito para que possa ser executado corretamente no simulador, garantindo que as portas e a estrutura do circuito estejam adequadas para a simulação.
+    simulator = AerSimulator()
+    compiled_circuit = transpile(qc, simulator)
     result = simulator.run(compiled_circuit, shots=1024).result()
     measurement_counts = result.get_counts(compiled_circuit) #serve para contar quantas vezes cada resultado foi obtido na execução do circuito, ou seja, ele vai contar quantas vezes obteve 00, 01, 10 e 11, por exemplo, se for um circuito de 2 qubits
 
@@ -288,7 +283,7 @@ def calculate_fidelity(
 def calculate_depth(circuit: QuantumCircuit) -> int:
     return circuit.depth()  #retorna a profundidade do circuito, ou seja, ele vai contar quantas camadas de portas existem no circuito para dar uma medida da complexidade do circuito
 
-def agent_metric(circuit: QuantumCircuit, requirements: StructuredCircuit, measurement_counts: dict, attempts: int) -> CircuitMetrics:
+def agent_metric(circuit: QuantumCircuit, requirements: StructuredCircuit, measurement_counts: dict) -> CircuitMetrics:
     fidelity = calculate_fidelity(
         measurement_counts,
         requirements.target_state,
@@ -296,10 +291,10 @@ def agent_metric(circuit: QuantumCircuit, requirements: StructuredCircuit, measu
     )
     depth = calculate_depth(circuit)
     gate_count = circuit.size() #conta o total de instruções no circuito (incluindo medições), útil como métrica de complexidade
-    return CircuitMetrics(fidelity=fidelity, depth=depth, gate_count=gate_count, attempts=attempts)
+    return CircuitMetrics(fidelity=fidelity, depth=depth, gate_count=gate_count)
 
 def agent_synthesizer(requirements: dict, planning: dict, metrics: dict) -> str:
-    agent_synthesizer = gpt_oss
+    agent_synthesizer = llama
     prompt_agent_synthesizer = ChatPromptTemplate.from_messages([
         (
             "system",
@@ -384,7 +379,7 @@ def run_quantum_pipeline(
             last_rejection_reason = f"Erro na execução do circuito: {str(exc)}"
             continue
 
-        metrics = agent_metric(qc, requirements, measurement_counts, attempt)
+        metrics = agent_metric(qc, requirements, measurement_counts)
 
         exec_check = agent_verifier_execution(measurement_counts, requirements, metrics)
         if not exec_check.approved:

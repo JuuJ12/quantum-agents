@@ -78,11 +78,7 @@ def _render_chat_message(message, image_width, index):
 
         summary = message.get("summary")
         if summary:
-            st.markdown(f"{summary}")
-
-        attempts = message.get("attempts")
-        if attempts is not None:
-            st.caption(f"Circuito gerado após {attempts} tentativa(s) de refinamento.")
+            st.markdown(f"**Resumo do sintetizador:** {summary}")
 
     has_technical_data = any([
         message.get("requirements") is not None,
@@ -160,6 +156,11 @@ if executar and user_prompt:
             circuit_text = str(result["qc"].draw(output="text"))
             circuit_image_base64 = _encode_image_to_base64(result["image_bytes"])
 
+            if result["attempts"] >=1:
+                st.info(
+                    f"Circuito gerado com sucesso após {result['attempts']} tentativas de refinamento."
+                )
+
             message_record = {
                 "prompt": user_prompt,
                 "requirements": result["requirements"].model_dump(),
@@ -169,7 +170,6 @@ if executar and user_prompt:
                 "summary": result["summary"],
                 "circuit_text": circuit_text,
                 "circuit_image_base64": circuit_image_base64,
-                "attempts": result["attempts"],
                 "message_type": "circuit_response",
             }
 
