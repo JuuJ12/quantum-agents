@@ -3,14 +3,14 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 
 
-class CircuitType(str, Enum): #serve para definir os tipos de circuitos que o agente construtor pode criar, ou seja, circuitos computacionais, circuitos de Bell, circuitos de GHZ e circuitos de superposição
+class CircuitType(str, Enum):
     COMPUTATIONAL = "computational"
     BELL = "bell"
     GHZ = "ghz"
     SUPERPOSITION = "superposition"
 
 
-class StructuredCircuit(BaseModel): # estrutura de dados para requisição do circuito, ou seja, o usuário vai pedir e vai ficar nesse formato
+class StructuredCircuit(BaseModel): 
     objective: str = Field(description="The objective of the circuit")
     num_qubits: int = Field(description="Number of qubits in the circuit")
     target_state: str = Field(description="Desired final quantum state")
@@ -20,7 +20,7 @@ class StructuredCircuit(BaseModel): # estrutura de dados para requisição do ci
     )
 
 
-class Gate(BaseModel): # estrutura de dados para a construção do circuito. Para cada qubit ele vai aplicar uma porta, e essa é a estrutura de dados para cada porta, ou seja, o nome da porta, os qubits alvo e os qubits de controle (se houver)
+class Gate(BaseModel): 
     gate_name: Literal["h", "x", "cx", "rz"] = Field(description="Name of the quantum gate (h, x, cx, rz)")
     target_qubits: List[int] = Field(description="List of target qubits for the gate")
     control_qubits: Optional[int | List[int]] = Field(
@@ -33,7 +33,7 @@ class Gate(BaseModel): # estrutura de dados para a construção do circuito. Par
     )
 
 
-class CircuitPlan(BaseModel): # estrutura da lista de portas que o agente construtor vai retornar, ou seja, a lista de portas que ele vai aplicar no circuito para atingir o objetivo do usuário
+class CircuitPlan(BaseModel): 
     gates: List[Gate] = Field(
         description="List of quantum gates to be applied in the circuit"
     )
@@ -42,6 +42,7 @@ class CircuitMetrics(BaseModel):
     fidelity: float = Field(description="Fidelity of the executed circuit compared to the target state")
     depth: int = Field(description="Depth of the executed circuit")
     gate_count: int = Field(description="Total number of gates used in the executed circuit")
+    attempts: int = Field(description="Number of attempts made to execute the circuit")
 
 
 class VerificationResult(BaseModel):
