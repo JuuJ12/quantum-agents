@@ -129,8 +129,9 @@ with st.form("quantum_circuit_form"):
 if executar and user_prompt:
     try:
         is_quantum = agent_verifier_if_is_quantum_awnser(user_prompt).is_quantum
-    except Exception:
-        is_quantum = False
+    except Exception as e:
+        st.error(f"ERRO no classificador: {e}")  # ← mostra o erro real
+        st.stop()
 
     if not is_quantum:
         message_record = {

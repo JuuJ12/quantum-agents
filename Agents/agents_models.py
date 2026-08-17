@@ -25,8 +25,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 load_dotenv()
 
-llama = ChatGroq(
-    model="llama-3.3-70b-versatile",
+gpt_os = ChatGroq(
+    model="openai/gpt-oss-120b",
     api_key=(os.getenv("GROQ_API_KEY")),
     temperature= 0.0,
 )
@@ -38,13 +38,21 @@ groq_comp = ChatGroq(
 )
 
 def agent_verifier_if_is_quantum_awnser(input: str) -> IsQuantumAwnser:
-    agent_verifier = llama.with_structured_output(schema=IsQuantumAwnser)
+    agent_verifier = gpt_os.with_structured_output(schema=IsQuantumAwnser)
     prompt_agent_verifier = ChatPromptTemplate.from_messages([
         (
             "system",
-            "You are an expert in identifying whether a user's question is related to quantum computing. "
-            "Analyze the question and determine if it is asking for something related to quantum computing concepts, circuits, qubits, or similar topics. "
-            "Return structured output with a boolean field 'is_quantum' indicating if the question is about quantum computing or not."
+            "You are a classifier for a quantum circuit generation system. "
+            "Return is_quantum=True if the user wants to CREATE, BUILD, GENERATE "
+            "or SIMULATE a quantum circuit, quantum state, or quantum operation — "
+            "even if the request is in Portuguese or uses informal language. "
+            "Examples that are TRUE: 'crie um circuito Bell', "
+            "'coloque o qubit 0 em superposição', 'make a GHZ state', "
+            "'aplique H no qubit 0'. "
+            "Return is_quantum=False ONLY if the request has absolutely nothing "
+            "to do with quantum circuits or quantum computing, such as general "
+            "questions, greetings, or unrelated topics. "
+            "When in doubt, return True."
         ),
         ("human", "{input}")
     ])
@@ -53,7 +61,7 @@ def agent_verifier_if_is_quantum_awnser(input: str) -> IsQuantumAwnser:
     return response
 
 def agent_extrator(input: str) -> StructuredCircuit:
-    agent_extrator = llama.with_structured_output(schema=StructuredCircuit)
+    agent_extrator = gpt_os.with_structured_output(schema=StructuredCircuit)
     prompt_agent_extrator =  ChatPromptTemplate.from_messages([
         (
             "system",
@@ -68,7 +76,7 @@ def agent_extrator(input: str) -> StructuredCircuit:
     return response
 
 def agent_builder(input: StructuredCircuit) -> CircuitPlan:
-    anget_builder = llama.with_structured_output(schema=CircuitPlan)
+    anget_builder = gpt_os.with_structured_output(schema=CircuitPlan)
     prompt_agent_builder = ChatPromptTemplate.from_messages([
     (
         "system",
@@ -90,7 +98,7 @@ def agent_verifier_plan(
     requirements: StructuredCircuit,
     plan: CircuitPlan
 ) -> VerificationResult:
-    verifier = llama.with_structured_output(schema=VerificationResult)
+    verifier = gpt_os.with_structured_output(schema=VerificationResult)
 
     prompt_verifier = ChatPromptTemplate.from_messages([
         (
@@ -294,7 +302,7 @@ def agent_metric(circuit: QuantumCircuit, requirements: StructuredCircuit, measu
     return CircuitMetrics(fidelity=fidelity, depth=depth, gate_count=gate_count)
 
 def agent_synthesizer(requirements: dict, planning: dict, metrics: dict) -> str:
-    agent_synthesizer = llama
+    agent_synthesizer = gpt_os
     prompt_agent_synthesizer = ChatPromptTemplate.from_messages([
         (
             "system",
